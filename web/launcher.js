@@ -100,9 +100,7 @@ try {
   grid.textContent = 'The launcher server is unreachable.';
 }
 
-const oldSection = document.getElementById('old');
 const oldList = document.getElementById('old-list');
-let oldLoaded = false;
 
 function renderOld(tools) {
   oldList.textContent = '';
@@ -137,14 +135,13 @@ function renderOld(tools) {
   }
 }
 
-// Release lists come from GitHub, so they load only when the section is opened.
-oldSection.addEventListener('toggle', async () => {
-  if (!oldSection.open || oldLoaded) return;
-  oldList.innerHTML = '<p class="empty">Loading previous versions…</p>';
+// The service worker keeps the last response, so the list is also available offline.
+async function loadOld() {
   try {
     renderOld(await (await fetch('/api/versions?remote=1')).json());
-    oldLoaded = true;
   } catch {
     oldList.innerHTML = '<p class="empty">The launcher server is unreachable.</p>';
   }
-});
+}
+
+loadOld();

@@ -1,6 +1,7 @@
 const SHELL = 'shell-v1';
 const APPS = 'apps-v1';
-const SHELL_FILES = ['/', '/launcher.js', '/style.css', '/manifest.webmanifest', '/icon.svg'];
+const SHELL_FILES = ['/', '/launcher.js', '/style.css', '/manifest.webmanifest', '/icon.svg', '/api/tools'];
+const NETWORK_TIMEOUT_MS = 3000;
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));
@@ -36,7 +37,7 @@ self.addEventListener('fetch', (e) => {
   const parts = url.pathname.split('/');
   // /apps/<tool>/<version>/... is immutable, so the cache can win.
   if (parts[1] === 'apps' && parts[3]) return e.respondWith(cacheFirst(request));
-  if (url.pathname === '/api/tools' || url.pathname === '/api/versions' || SHELL_FILES.includes(url.pathname)) {
+  if (url.pathname === '/api/versions' || SHELL_FILES.includes(url.pathname)) {
     return e.respondWith(networkFirst(request));
   }
 });
@@ -52,13 +53,16 @@ async function cacheFirst(request) {
 
 async function networkFirst(request) {
   const cache = await caches.open(SHELL);
+  const cached = await cache.match(request, { ignoreSearch: true });
   try {
-    const res = await fetch(request);
+    // Only race a timeout when there is something to fall back to.
+    const res = await (cached
+      ? Promise.race([fetch(request), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), NETWORK_TIMEOUT_MS))])
+      : fetch(request));
     if (res.ok) cache.put(request, res.clone());
     return res;
   } catch (err) {
-    const hit = await cache.match(request, { ignoreSearch: true });
-    if (hit) return hit;
+    if (cached) return cached;
     throw err;
   }
 }
