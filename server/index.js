@@ -2,7 +2,9 @@ import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { basename, extname, join, normalize, sep } from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
+import { createBrotliDecompress } from 'node:zlib';
 import { installVersion, launch, previousVersions } from './updater.js';
 import { readCurrent, versionDir, VERSION_RE } from './store.js';
 
@@ -126,45 +128,43 @@ async function serve(req, res, root, rel, cachePolicy, precompressed = false) {
 
   let file = normalize(join(root, decoded));
   if (file !== root && !file.startsWith(root + sep)) return text(res, 404, 'Not found');
+  // The stored .br files are an implementation detail, not addressable paths.
+  if (precompressed && file.endsWith('.br')) return text(res, 404, 'Not found');
 
-  let st = await stat(file).catch(() => null);
-  if (st?.isDirectory()) {
-    file = join(file, 'index.html');
-    st = await stat(file).catch(() => null);
-  }
-  if (!st?.isFile()) return text(res, 404, 'Not found');
+  if ((await stat(file).catch(() => null))?.isDirectory()) file = join(file, 'index.html');
+
+  const plain = await statFile(file);
+  const stored = precompressed ? await statFile(`${file}.br`) : null;
+  if (!plain && !stored) return text(res, 404, 'Not found');
+
+  const sendBr = Boolean(stored) && /\bbr\b/.test(req.headers['accept-encoding'] ?? '');
+  const source = sendBr ? stored : (plain ?? stored);
+  const fromBr = source === stored;
+  const decode = fromBr && !sendBr;
 
   const headers = {
     'Content-Type': MIME[extname(file)] ?? 'application/octet-stream',
     'Cache-Control': cachePolicy(file),
-    ETag: `W/"${st.size.toString(16)}-${Math.floor(st.mtimeMs).toString(16)}"`,
+    ETag: `W/"${source.size.toString(16)}-${Math.floor(source.mtimeMs).toString(16)}"`,
   };
+  if (precompressed) headers.Vary = 'Accept-Encoding';
+  if (sendBr) headers['Content-Encoding'] = 'br';
+  // The decoded length is unknown up front, so decoded responses are chunked.
+  if (!decode) headers['Content-Length'] = source.size;
+
   if (req.headers['if-none-match'] === headers.ETag) {
+    delete headers['Content-Length'];
     res.writeHead(304, headers);
     return res.end();
   }
 
-  let send = file;
-  if (precompressed) {
-    headers.Vary = 'Accept-Encoding';
-    const accept = req.headers['accept-encoding'] ?? '';
-    for (const [enc, ext] of [['br', '.br'], ['gzip', '.gz']]) {
-      if (!accept.includes(enc)) continue;
-      const cst = await stat(file + ext).catch(() => null);
-      if (cst?.isFile()) {
-        send = file + ext;
-        headers['Content-Encoding'] = enc;
-        headers['Content-Length'] = cst.size;
-        break;
-      }
-    }
-  }
-  if (send === file) headers['Content-Length'] = st.size;
-
   res.writeHead(200, headers);
   if (req.method === 'HEAD') return res.end();
-  createReadStream(send).on('error', () => res.destroy()).pipe(res);
+  const input = createReadStream(fromBr ? `${file}.br` : file);
+  pipeline(decode ? [input, createBrotliDecompress(), res] : [input, res]).catch(() => res.destroy());
 }
+
+const statFile = (p) => stat(p).then((s) => (s.isFile() ? s : null), () => null);
 
 function text(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });

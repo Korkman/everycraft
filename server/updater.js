@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
-import { constants, createBrotliCompress, createGzip } from 'node:zlib';
+import { constants, createBrotliCompress } from 'node:zlib';
 import { appDir, listOldVersions, prune, readCurrent, versionDir, VERSION_RE, writeCurrent } from './store.js';
 
 const run = promisify(execFile);
@@ -231,6 +231,6 @@ async function precompress(dir) {
       params: { [constants.BROTLI_PARAM_QUALITY]: 9, [constants.BROTLI_PARAM_SIZE_HINT]: size },
     });
     await pipeline(createReadStream(file), brotli, createWriteStream(`${file}.br`));
-    await pipeline(createReadStream(file), createGzip({ level: 9 }), createWriteStream(`${file}.gz`));
+    await rm(file);
   }
 }
