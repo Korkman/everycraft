@@ -26,6 +26,11 @@ dismiss.addEventListener('click', () => {
   overlay.hidden = true;
 });
 
+// Back navigation restores this page from the bfcache with the overlay still showing.
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) overlay.hidden = true;
+});
+
 // Last known URL lets a tool open from the service worker cache when the server is unreachable.
 function open(id, url) {
   localStorage.setItem(`last:${id}`, url);
