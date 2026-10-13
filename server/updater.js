@@ -99,35 +99,34 @@ async function releaseTags(tool) {
 async function update(id, tool, job) {
   const cur = await readCurrent(id);
   job.previousVersion = cur?.version ?? null;
-  // Any failure after this point falls back to the installed version.
-  const fallback = (err) => {
-    console.warn(`[${id}] update failed: ${err.message}`);
-    if (cur) job.set('ready', { version: cur.version });
-    else job.set('failed', { error: err.message });
-  };
 
-  if (cur && Date.now() - cur.checkedAt < CHECK_TTL_MS) {
-    return job.set('ready', { version: cur.version });
+  // Installed: open it right away and refresh server-side; the next launch picks up the result.
+  if (cur) {
+    job.set('ready', { version: cur.version });
+    startJob(`${id}:refresh`, (bg) => refresh(id, tool, cur, bg));
+    return;
   }
 
   let latest;
   try {
-    latest = await fetchLatest(tool, cur ? CHECK_TIMEOUT_MS : FIRST_CHECK_TIMEOUT_MS);
-  } catch (err) {
-    return fallback(err);
-  }
-
-  if (cur?.version === latest.version) {
-    await writeCurrent(id, { ...cur, checkedAt: Date.now() });
-    return job.set('ready', { version: cur.version });
-  }
-
-  job.set('updating', { version: latest.version });
-  try {
+    latest = await fetchLatest(tool, FIRST_CHECK_TIMEOUT_MS);
+    job.set('updating', { version: latest.version });
     await install(id, latest);
     job.set('ready', { version: latest.version });
   } catch (err) {
-    fallback(err);
+    console.warn(`[${id}] install failed: ${err.message}`);
+    job.set('failed', { error: err.message });
+  }
+}
+
+async function refresh(id, tool, cur) {
+  if (Date.now() - cur.checkedAt < CHECK_TTL_MS) return;
+  try {
+    const latest = await fetchLatest(tool, CHECK_TIMEOUT_MS);
+    if (latest.version === cur.version) await writeCurrent(id, { ...cur, checkedAt: Date.now() });
+    else await install(id, latest);
+  } catch (err) {
+    console.warn(`[${id}] background update failed: ${err.message}`);
   }
 }
 
@@ -228,7 +227,7 @@ async function precompress(dir) {
     if (!COMPRESSIBLE.has(ext) || size < 1024) continue;
 
     const brotli = createBrotliCompress({
-      params: { [constants.BROTLI_PARAM_QUALITY]: 9, [constants.BROTLI_PARAM_SIZE_HINT]: size },
+      params: { [constants.BROTLI_PARAM_QUALITY]: 11, [constants.BROTLI_PARAM_SIZE_HINT]: size },
     });
     await pipeline(createReadStream(file), brotli, createWriteStream(`${file}.br`));
     await rm(file);
