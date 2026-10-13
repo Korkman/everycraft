@@ -1,0 +1,13 @@
+{
+  "name": "EveryCraft",
+  "short_name": "EveryCraft",
+  "description": "Unofficial launcher for the ArtCraft Crafting Apps",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#14141a",
+  "theme_color": "#14141a",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

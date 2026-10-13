@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EveryCraft</title>
+  <meta name="theme-color" content="#14141a">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <h1>EveryCraft</h1>
+    <p class="sub">Unofficial launcher for the ArtCraft Crafting Apps. Pick a tool to start.</p>
+    <div id="tools" class="tools"></div>
+    <p class="disclaimer">EveryCraft is an unofficial community project. It is not affiliated with or endorsed by the ArtCraft team. The Crafting Apps and the ArtCraft name belong to their respective owners.</p>
+  </main>
+
+  <div id="overlay" class="overlay" hidden>
+    <div class="card">
+      <div id="spinner" class="spinner"></div>
+      <p id="message"></p>
+      <button id="dismiss" hidden>Back</button>
+    </div>
+  </div>
+
+  <script src="/launcher.js" type="module"></script>
+</body>
+</html>

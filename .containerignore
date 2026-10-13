@@ -1,0 +1,5 @@
+.git
+.vscode
+*.code-workspace
+node_modules
+README.md

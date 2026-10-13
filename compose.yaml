@@ -1,0 +1,24 @@
+services:
+  launcher:
+    image: localhost/everycraft:dev
+    build:
+      context: .
+      dockerfile: Containerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - everycraft-data:/data
+    environment:
+      # Optional: raises the GitHub API rate limit from 60 to 5000 requests/hour.
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    restart: unless-stopped
+    # Default bridge network resolves DNS via the host; per-project networks need aardvark-dns.
+    network_mode: bridge
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  everycraft-data:

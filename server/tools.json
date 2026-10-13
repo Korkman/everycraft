@@ -1,0 +1,80 @@
+{
+  "photocraft": {
+    "name": "PhotoCraft",
+    "description": "Image editing: layers, masks, type and real PSD files",
+    "repo": "storytold/photocraft",
+    "asset": "^photocraft-web-.*\\.zip$"
+  },
+  "vectorcraft": {
+    "name": "VectorCraft",
+    "description": "Vector illustration",
+    "repo": "storytold/vectorcraft",
+    "asset": "^vectorcraft-web-.*\\.zip$"
+  },
+  "filmcraft": {
+    "name": "FilmCraft",
+    "description": "Video editing, color and sound",
+    "repo": "storytold/filmcraft",
+    "asset": "^filmcraft-web-.*\\.zip$"
+  },
+  "lightcraft": {
+    "name": "LightCraft",
+    "description": "Photo library and raw development",
+    "repo": "storytold/lightcraft",
+    "asset": "^lightcraft-web-.*\\.zip$"
+  },
+  "pdfcraft": {
+    "name": "PdfCraft",
+    "description": "Reading, organizing and protecting PDFs",
+    "repo": "storytold/pdfcraft",
+    "asset": "^pdfcraft-web-.*\\.zip$"
+  },
+  "effectcraft": {
+    "name": "EffectCraft",
+    "description": "Motion graphics and visual effects",
+    "repo": "storytold/effectcraft",
+    "asset": "^effectcraft-web-.*\\.zip$"
+  },
+  "designcraft": {
+    "name": "DesignCraft",
+    "description": "Page layout and publishing",
+    "repo": "storytold/designcraft",
+    "asset": "^designcraft-web-.*\\.zip$"
+  },
+  "gridcraft": {
+    "name": "GridCraft",
+    "description": "Spreadsheets",
+    "repo": "storytold/gridcraft",
+    "asset": "^gridcraft-web-.*\\.zip$"
+  },
+  "cadcraft": {
+    "name": "CADCraft",
+    "description": "Computer-aided design and drafting",
+    "repo": "storytold/cadcraft",
+    "asset": "^cadcraft-web-.*\\.zip$"
+  },
+  "deckcraft": {
+    "name": "DeckCraft",
+    "description": "Presentations and slide shows",
+    "repo": "storytold/deckcraft",
+    "asset": "^deckcraft-web-.*\\.zip$"
+  },
+  "soundcraft": {
+    "name": "SoundCraft",
+    "description": "Audio recording and mixing",
+    "repo": "storytold/soundcraft",
+    "asset": "^soundcraft-web-.*\\.zip$"
+  },
+  "wordcraft": {
+    "name": "WordCraft",
+    "description": "Word processing",
+    "repo": "storytold/wordcraft",
+    "asset": "^wordcraft-web-.*\\.zip$"
+  },
+  "figcraft": {
+    "name": "FigCraft",
+    "description": "Interface design and prototyping",
+    "repo": "storytold/figcraft",
+    "asset": "^figcraft-web-.*\\.zip$"
+  }
+}
