@@ -7,7 +7,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 import { constants, createBrotliCompress, createGzip } from 'node:zlib';
-import { appDir, prune, readCurrent, versionDir, VERSION_RE, writeCurrent } from './store.js';
+import { appDir, listOldVersions, prune, readCurrent, versionDir, VERSION_RE, writeCurrent } from './store.js';
 
 const run = promisify(execFile);
 
@@ -16,34 +16,89 @@ const CHECK_TIMEOUT_MS = 3_000;
 // With nothing installed there is no fallback, so wait for slow container networks.
 const FIRST_CHECK_TIMEOUT_MS = 30_000;
 const DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
-const KEEP_VERSIONS = 2;
+const KEEP_VERSIONS = 3;
+export const PREVIOUS_COUNT = 3;
+const RELEASES_TTL_MS = 60 * 60_000;
+const REMOTE_TIMEOUT_MS = 5_000;
+const TAG_TIMEOUT_MS = 30_000;
 const COMPRESSIBLE = new Set(['.wasm', '.js', '.html', '.css', '.json', '.txt', '.svg']);
 
 const jobs = new Map();
+const releaseCache = new Map();
 
-// Joins the running job for a tool or starts one; never rejects.
-export function launch(id, tool) {
-  const running = jobs.get(id);
+// Joins the running job for a key or starts one; never rejects.
+function startJob(key, work) {
+  const running = jobs.get(key);
   if (running) return running;
 
-  const job = { state: 'checking', version: null, error: null, listeners: new Set() };
+  const job = { state: 'checking', version: null, previousVersion: null, error: null, listeners: new Set() };
   job.set = (state, extra = {}) => {
     Object.assign(job, { state }, extra);
     for (const l of [...job.listeners]) l(job);
   };
-  jobs.set(id, job);
+  jobs.set(key, job);
 
-  update(id, tool, job)
+  work(job)
     .catch((err) => {
-      console.error(`[${id}] unexpected error:`, err);
+      console.error(`[${key}] unexpected error:`, err);
       job.set('failed', { error: err.message });
     })
-    .finally(() => jobs.delete(id));
+    .finally(() => jobs.delete(key));
   return job;
+}
+
+export const launch = (id, tool) => startJob(id, (job) => update(id, tool, job));
+
+// Downloads one specific release without making it the current version.
+export const installVersion = (id, tool, version) =>
+  startJob(`${id}@${version}`, (job) => installOld(id, tool, version, job));
+
+async function installOld(id, tool, version, job) {
+  if (!VERSION_RE.test(version)) throw new Error('invalid version');
+  const cur = await readCurrent(id);
+  if (cur?.version === version || (await listOldVersions(id)).includes(version)) {
+    return job.set('ready', { version });
+  }
+  job.set('updating', { version });
+  const rel = toRelease(tool, await ghJson(`/repos/${tool.repo}/releases/tags/${encodeURIComponent(version)}`, TAG_TIMEOUT_MS));
+  await install(id, rel, { activate: false });
+  job.set('ready', { version });
+}
+
+// Up to `count` releases older than the installed one; installed ones are marked so the UI can skip the download.
+export async function previousVersions(id, tool, remote, count = PREVIOUS_COUNT) {
+  const cur = await readCurrent(id);
+  if (!cur) return [];
+  const old = await listOldVersions(id);
+  if (remote) {
+    try {
+      const tags = await releaseTags(tool);
+      const idx = tags.indexOf(cur.version);
+      // A current version missing from the list is not comparable, so offer the newest others.
+      const older = idx >= 0 ? tags.slice(idx + 1) : tags.filter((t) => t !== cur.version);
+      return older.slice(0, count).map((version) => ({ version, installed: old.includes(version) }));
+    } catch (err) {
+      console.warn(`[${id}] release list failed: ${err.message}`);
+    }
+  }
+  return old.slice(0, count).map((version) => ({ version, installed: true }));
+}
+
+async function releaseTags(tool) {
+  const hit = releaseCache.get(tool.repo);
+  if (hit && Date.now() - hit.at < RELEASES_TTL_MS) return hit.tags;
+  const list = await ghJson(`/repos/${tool.repo}/releases?per_page=30`, REMOTE_TIMEOUT_MS);
+  const pattern = new RegExp(tool.asset);
+  const tags = list
+    .filter((r) => !r.draft && !r.prerelease && VERSION_RE.test(r.tag_name ?? '') && r.assets?.some((a) => pattern.test(a.name)))
+    .map((r) => r.tag_name);
+  releaseCache.set(tool.repo, { at: Date.now(), tags });
+  return tags;
 }
 
 async function update(id, tool, job) {
   const cur = await readCurrent(id);
+  job.previousVersion = cur?.version ?? null;
   // Any failure after this point falls back to the installed version.
   const fallback = (err) => {
     console.warn(`[${id}] update failed: ${err.message}`);
@@ -76,17 +131,19 @@ async function update(id, tool, job) {
   }
 }
 
-async function fetchLatest(tool, timeoutMs) {
+async function ghJson(path, timeoutMs) {
   const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'everycraft' };
   if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
 
-  const res = await fetch(`https://api.github.com/repos/${tool.repo}/releases/latest`, {
-    headers,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const res = await fetch(`https://api.github.com${path}`, { headers, signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) throw new Error(`GitHub API responded ${res.status}`);
-  const rel = await res.json();
+  return res.json();
+}
 
+const fetchLatest = async (tool, timeoutMs) =>
+  toRelease(tool, await ghJson(`/repos/${tool.repo}/releases/latest`, timeoutMs));
+
+function toRelease(tool, rel) {
   if (!VERSION_RE.test(rel.tag_name ?? '')) throw new Error(`unusable release tag ${rel.tag_name}`);
   const pattern = new RegExp(tool.asset);
   const asset = rel.assets?.find((a) => pattern.test(a.name));
@@ -101,7 +158,7 @@ async function fetchLatest(tool, timeoutMs) {
   };
 }
 
-async function install(id, latest) {
+async function install(id, latest, { activate = true } = {}) {
   const tmp = join(appDir(id), `.tmp-${randomBytes(4).toString('hex')}`);
   await mkdir(tmp, { recursive: true });
   try {
@@ -119,9 +176,11 @@ async function install(id, latest) {
     const dest = versionDir(id, latest.version);
     await rm(dest, { recursive: true, force: true });
     await rename(root, dest);
-    const now = Date.now();
-    await writeCurrent(id, { version: latest.version, installedAt: now, checkedAt: now });
-    await prune(id, KEEP_VERSIONS);
+    if (activate) {
+      const now = Date.now();
+      await writeCurrent(id, { version: latest.version, installedAt: now, checkedAt: now });
+      await prune(id, KEEP_VERSIONS);
+    }
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }

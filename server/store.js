@@ -41,3 +41,15 @@ export async function prune(tool, keep) {
     await rm(versionDir(tool, name), { recursive: true, force: true });
   }
 }
+
+// Installed versions other than the current one, newest first.
+export async function listOldVersions(tool) {
+  const cur = await readCurrent(tool);
+  const entries = await readdir(appDir(tool), { withFileTypes: true }).catch(() => []);
+  const old = [];
+  for (const e of entries) {
+    if (!e.isDirectory() || !VERSION_RE.test(e.name) || e.name === cur?.version) continue;
+    old.push({ version: e.name, mtime: (await stat(versionDir(tool, e.name))).mtimeMs });
+  }
+  return old.sort((a, b) => b.mtime - a.mtime).map((o) => o.version);
+}

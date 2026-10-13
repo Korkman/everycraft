@@ -13,6 +13,12 @@ main { width: min(960px, 92vw); text-align: center; padding: 2rem 0; }
 h1 { margin: 0; font-size: 2.2rem; letter-spacing: .04em; }
 .sub { color: #9a9aa8; margin: .25rem 0 2rem; }
 .disclaimer { color: #6c6c7a; font-size: .8rem; margin-top: 2.5rem; }
+.old { margin-top: 2rem; text-align: left; color: #9a9aa8; }
+.old summary { cursor: pointer; }
+.old .row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .6rem 0; }
+.old .row strong { min-width: 8rem; color: #e8e8ee; }
+.old a { color: #8f8fff; border: 1px solid #34344a; border-radius: 8px; padding: .15rem .6rem; text-decoration: none; }
+.old a:hover { border-color: #5b5bff; }
 .tools { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 button {
   font: inherit;

@@ -36,7 +36,7 @@ self.addEventListener('fetch', (e) => {
   const parts = url.pathname.split('/');
   // /apps/<tool>/<version>/... is immutable, so the cache can win.
   if (parts[1] === 'apps' && parts[3]) return e.respondWith(cacheFirst(request));
-  if (url.pathname === '/api/tools' || SHELL_FILES.includes(url.pathname)) {
+  if (url.pathname === '/api/tools' || url.pathname === '/api/versions' || SHELL_FILES.includes(url.pathname)) {
     return e.respondWith(networkFirst(request));
   }
 });

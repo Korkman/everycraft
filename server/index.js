@@ -3,7 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { basename, extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { launch } from './updater.js';
+import { installVersion, launch, previousVersions } from './updater.js';
 import { readCurrent, versionDir, VERSION_RE } from './store.js';
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -51,23 +51,41 @@ async function route(req, res) {
     const list = Object.entries(tools).map(([id, t]) => ({ id, name: t.name, description: t.description }));
     return json(res, list, 'no-store');
   }
-  if (path.startsWith('/api/launch/')) return sse(req, res, decodeURIComponent(path.slice(12)));
+  if (path === '/api/versions') {
+    const remote = url.searchParams.has('remote');
+    const rows = await Promise.all(
+      Object.entries(tools).map(async ([id, t]) => ({
+        id,
+        name: t.name,
+        versions: (await previousVersions(id, t, remote)).map((v) => ({ ...v, url: `/apps/${id}/${v.version}/` })),
+      })),
+    );
+    return json(res, rows.filter((r) => r.versions.length), 'no-store');
+  }
+  if (path.startsWith('/api/install/')) {
+    const [id, version] = path.slice(13).split('/').map(decodeURIComponent);
+    if (!Object.hasOwn(tools, id) || !VERSION_RE.test(version ?? '')) return text(res, 404, 'Not found');
+    return stream(req, res, installVersion(id, tools[id], version), id);
+  }
+  if (path.startsWith('/api/launch/')) {
+    const id = decodeURIComponent(path.slice(12));
+    if (!Object.hasOwn(tools, id)) return text(res, 404, 'Unknown tool');
+    return stream(req, res, launch(id, tools[id]), id);
+  }
   if (path.startsWith('/apps/')) return app(req, res, url);
   return serve(req, res, WEB_ROOT, path === '/' ? 'index.html' : path, () => NO_CACHE);
 }
 
-async function sse(req, res, id) {
-  if (!Object.hasOwn(tools, id)) return text(res, 404, 'Unknown tool');
-  const job = launch(id, tools[id]);
-
+function stream(req, res, job, id) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-store',
     'X-Accel-Buffering': 'no',
   });
   const send = (j) => {
-    const body = { state: j.state, version: j.version, error: j.error };
+    const body = { state: j.state, version: j.version, previousVersion: j.previousVersion, error: j.error };
     if (j.state === 'ready') body.url = `/apps/${id}/${j.version}/`;
+    if (j.state === 'updating' && j.previousVersion) body.previousUrl = `/apps/${id}/${j.previousVersion}/`;
     res.write(`data: ${JSON.stringify(body)}\n\n`);
     if (j.state === 'ready' || j.state === 'failed') {
       j.listeners.delete(send);
