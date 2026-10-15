@@ -4,7 +4,7 @@ EveryCraft is an unofficial container launcher for the ArtCraft Crafting Apps (t
 
 ## Requirements
 
-- The start page shows one button per tool. Clicking it opens the installed version immediately and checks for a newer release in the background on the server; the update applies on the next launch. Failures are only logged.
+- The start page shows one button per tool. Clicking it checks for a newer release in the foreground (the page shows progress, with a skip option to open the installed version while an update downloads), then opens the result. If the check or update fails and a version is installed, that version opens; failures are logged.
   - With nothing installed, show "Please wait while your app is installed", then open the tool. Only a failed first install reports an error.
 - Behave like a PWA: the start page and any visited tool version must open offline.
 - Updates are checked only on click. No background polling.

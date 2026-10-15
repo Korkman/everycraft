@@ -100,34 +100,35 @@ async function releaseTags(tool) {
 async function update(id, tool, job) {
   const cur = await readCurrent(id);
   job.previousVersion = cur?.version ?? null;
+  // Any failure after this point falls back to the installed version.
+  const fallback = (err) => {
+    console.warn(`[${id}] update failed: ${err.message}`);
+    if (cur) job.set('ready', { version: cur.version });
+    else job.set('failed', { error: err.message });
+  };
 
-  // Installed: open it right away and refresh server-side; the next launch picks up the result.
-  if (cur) {
-    job.set('ready', { version: cur.version });
-    startJob(`${id}:refresh`, (bg) => refresh(id, tool, cur, bg));
-    return;
+  if (cur && Date.now() - cur.checkedAt < CHECK_TTL_MS) {
+    return job.set('ready', { version: cur.version });
   }
 
   let latest;
   try {
-    latest = await fetchLatest(tool, FIRST_CHECK_TIMEOUT_MS);
-    job.set('updating', { version: latest.version });
+    latest = await fetchLatest(tool, cur ? CHECK_TIMEOUT_MS : FIRST_CHECK_TIMEOUT_MS);
+  } catch (err) {
+    return fallback(err);
+  }
+
+  if (cur?.version === latest.version) {
+    await writeCurrent(id, { ...cur, checkedAt: Date.now() });
+    return job.set('ready', { version: cur.version });
+  }
+
+  job.set('updating', { version: latest.version });
+  try {
     await install(id, latest);
     job.set('ready', { version: latest.version });
   } catch (err) {
-    console.warn(`[${id}] install failed: ${err.message}`);
-    job.set('failed', { error: err.message });
-  }
-}
-
-async function refresh(id, tool, cur) {
-  if (Date.now() - cur.checkedAt < CHECK_TTL_MS) return;
-  try {
-    const latest = await fetchLatest(tool, CHECK_TIMEOUT_MS);
-    if (latest.version === cur.version) await writeCurrent(id, { ...cur, checkedAt: Date.now() });
-    else await install(id, latest);
-  } catch (err) {
-    console.warn(`[${id}] background update failed: ${err.message}`);
+    fallback(err);
   }
 }
 
