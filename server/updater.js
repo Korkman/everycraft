@@ -22,6 +22,7 @@ const RELEASES_TTL_MS = 60 * 60_000;
 const REMOTE_TIMEOUT_MS = 5_000;
 const TAG_TIMEOUT_MS = 30_000;
 const COMPRESSIBLE = new Set(['.wasm', '.js', '.html', '.css', '.json', '.txt', '.svg']);
+const BROTLI_LEVEL = 9;
 
 const jobs = new Map();
 const releaseCache = new Map();
@@ -227,7 +228,7 @@ async function precompress(dir) {
     if (!COMPRESSIBLE.has(ext) || size < 1024) continue;
 
     const brotli = createBrotliCompress({
-      params: { [constants.BROTLI_PARAM_QUALITY]: 11, [constants.BROTLI_PARAM_SIZE_HINT]: size },
+      params: { [constants.BROTLI_PARAM_QUALITY]: BROTLI_LEVEL, [constants.BROTLI_PARAM_SIZE_HINT]: size },
     });
     await pipeline(createReadStream(file), brotli, createWriteStream(`${file}.br`));
     await rm(file);
