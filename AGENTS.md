@@ -56,6 +56,7 @@ Add a tool by adding an entry to `server/tools.json`; its release must publish a
 - Updates for a tool are single-flight: concurrent clicks share one job.
 - The first release check waits up to 30 s when nothing is installed (no fallback), 3 s otherwise.
 - All tools share one origin, so they share `localStorage`.
+- PhotoCraft 0.19.0 loads `./snippets/` from `app/` but ships `snippets/` at the version root; `server/index.js` falls back from `app/snippets/*` to `snippets/*`. Do not copy files to work around this.
 - Set `GITHUB_TOKEN` to raise the unauthenticated GitHub API limit (60 requests/hour).
 - Bump the `shell-v1` / `apps-v1` cache names in `web/sw.js` only for incompatible cache changes; the activate step deletes other cache names.
 

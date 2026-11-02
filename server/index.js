@@ -112,8 +112,11 @@ async function app(req, res, url) {
   // Relative asset URLs need the trailing slash.
   if (rest.length === 0) return redirect(res, `${url.pathname}/${url.search}`);
 
-  const rel = rest.join('/') || 'index.html';
-  return serve(req, res, versionDir(id, version), rel, (file) =>
+  const dir = versionDir(id, version);
+  let rel = rest.join('/') || 'index.html';
+  // photocraft 0.19.0 loads ./snippets/ relative to app/, but ships snippets/ at the version root.
+  if (rel.startsWith('app/snippets/') && !(await statFile(join(dir, rel)))) rel = rel.slice('app/'.length);
+  return serve(req, res, dir, rel, (file) =>
     REVALIDATE_NAMES.has(basename(file)) ? NO_CACHE : IMMUTABLE, true);
 }
 
