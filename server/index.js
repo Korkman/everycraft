@@ -117,10 +117,18 @@ async function app(req, res, url) {
     return redirect(res, `/apps/${id}/${cur.version}/${url.search}`);
   }
   if (!VERSION_RE.test(version)) return text(res, 404, 'Not found');
+
+  const dir = versionDir(id, version);
+  // A version that is not on disk (pruned or never installed) moves to the current one.
+  if (!(await stat(dir).catch(() => null))?.isDirectory()) {
+    const cur = await readCurrent(id);
+    if (!cur) return text(res, 404, 'Not installed');
+    return redirect(res, `/apps/${id}/${cur.version}/${rest.join('/')}${url.search}`);
+  }
   // Relative asset URLs need the trailing slash.
   if (rest.length === 0) return redirect(res, `${url.pathname}/${url.search}`);
 
-  const dir = versionDir(id, version);
+
   let rel = rest.join('/') || 'index.html';
   // photocraft 0.19.0 loads ./snippets/ relative to app/, but ships snippets/ at the version root.
   if (rel.startsWith('app/snippets/') && !(await statFile(join(dir, rel)))) rel = rel.slice('app/'.length);

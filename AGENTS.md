@@ -41,7 +41,7 @@ Add a tool by adding an entry to `server/tools.json`; its release must publish a
 - `GET /api/launch/:tool`: SSE stream of `checking` / `updating` / `ready` / `failed`. `updating` includes `previousUrl` when an older version is installed. `ready` includes `url`.
 - `GET /api/install/:tool/:version`: same stream, for downloading one specific release without activating it.
 - `GET /api/versions[?remote=1]`: up to three previous versions per installed tool. `remote=1` fills from GitHub releases (cached 1 hour) and marks which are already installed.
-- `GET /apps/:tool/` redirects to the current version. `GET /apps/:tool/:version/*` serves files.
+- `GET /apps/:tool/` redirects to the current version. `GET /apps/:tool/:version/*` serves files; a version that is not on disk redirects to the same path under the current version.
 - `GET /healthz`.
 
 ## Caching rules
