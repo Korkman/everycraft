@@ -88,18 +88,32 @@ function follow(streamUrl, tool, { remember, verb }) {
 try {
   const tools = await (await fetch('/api/tools')).json();
   for (const tool of tools) {
-    const btn = document.createElement('button');
-    btn.className = 'tool';
-    btn.innerHTML = '<strong></strong><span></span>';
+    const link = document.createElement('a');
+    link.className = 'tool';
+    link.href = `/?launch=${encodeURIComponent(tool.id)}`;
+    link.innerHTML = '<strong></strong><span></span>';
     const img = document.createElement('img');
     img.className = 'tool-icon';
     img.alt = '';
     img.src = tool.icon ?? '/placeholder.svg';
-    btn.prepend(img);
-    btn.querySelector('strong').textContent = tool.name;
-    btn.querySelector('span').textContent = tool.description;
-    btn.addEventListener('click', () => launch(tool));
-    grid.append(btn);
+    link.prepend(img);
+    link.querySelector('strong').textContent = tool.name;
+    link.querySelector('span').textContent = tool.description;
+    // Modified and middle clicks are left to the browser, which opens the link in a new tab.
+    link.addEventListener('click', (e) => {
+      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      launch(tool);
+    });
+    grid.append(link);
+  }
+
+  const requested = new URLSearchParams(location.search).get('launch');
+  if (requested) {
+    history.replaceState(null, '', '/');
+    const tool = tools.find((t) => t.id === requested);
+    if (tool) launch(tool);
+    else fail(`Unknown tool: ${requested}`);
   }
 } catch {
   grid.textContent = 'The launcher server is unreachable.';

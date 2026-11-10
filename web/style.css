@@ -20,7 +20,7 @@ h1 { margin: 0; font-size: 2.2rem; letter-spacing: .04em; }
 .old a { color: #8f8fff; border: 1px solid #34344a; border-radius: 8px; padding: .15rem .6rem; text-decoration: none; }
 .old a:hover { border-color: #5b5bff; }
 .tools { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-button {
+button, a.tool {
   font: inherit;
   color: inherit;
   cursor: pointer;
@@ -29,8 +29,8 @@ button {
   background: #1e1e2a;
   padding: .7rem 1.2rem;
 }
-button:hover { background: #28283a; border-color: #5b5bff; }
-.tool { display: grid; grid-template-columns: auto 1fr; align-items: center; padding: 1rem 1.2rem; text-align: left; }
+button:hover, a.tool:hover { background: #28283a; border-color: #5b5bff; }
+.tool { display: grid; grid-template-columns: auto 1fr; align-items: center; padding: 1rem 1.2rem; text-align: left; text-decoration: none; }
 .tool strong, .tool span { grid-column: 2; }
 .tool-icon { grid-column: 1; grid-row: span 2; width: 48px; height: 48px; margin-right: .9rem; border-radius: 10px; }
 .tool strong { font-size: 1.2rem; }
