@@ -91,6 +91,13 @@ try {
     const btn = document.createElement('button');
     btn.className = 'tool';
     btn.innerHTML = '<strong></strong><span></span>';
+    if (tool.icon) {
+      const img = document.createElement('img');
+      img.className = 'tool-icon';
+      img.alt = '';
+      img.src = tool.icon;
+      btn.prepend(img);
+    }
     btn.querySelector('strong').textContent = tool.name;
     btn.querySelector('span').textContent = tool.description;
     btn.addEventListener('click', () => launch(tool));

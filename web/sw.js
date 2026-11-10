@@ -37,6 +37,8 @@ self.addEventListener('fetch', (e) => {
   const parts = url.pathname.split('/');
   // /apps/<tool>/<version>/... is immutable, so the cache can win.
   if (parts[1] === 'apps' && parts[3]) return e.respondWith(cacheFirst(request));
+  // Icons are refreshed on each download, so they are network-first and only fall back to the cache offline.
+  if (parts[1] === 'icons') return e.respondWith(networkFirst(request));
   if (url.pathname === '/api/versions' || SHELL_FILES.includes(url.pathname)) {
     return e.respondWith(networkFirst(request));
   }

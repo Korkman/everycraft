@@ -28,7 +28,7 @@ Add a tool by adding an entry to `server/tools.json`; its release must publish a
 
 ## Data layout
 
-`/data/apps/<tool>/<version>/` holds an extracted site. `/data/apps/<tool>/current.json` holds `{version, installedAt, checkedAt}`.
+`/data/apps/<tool>/<version>/` holds an extracted site. `/data/apps/<tool>/current.json` holds `{version, installedAt, checkedAt}`. `/data/apps/<tool>/icon.png` is the 128 px product icon, refetched on every download (install or launch update) from the tag's repo at `assets/app-icon/hicolor/128x128/apps/ai.storyteller.<tool>.png` (the release zips contain no icons). A failed fetch keeps the previous icon, is logged, and never fails the install.
 
 - Installs extract to a `.tmp-*` directory and are renamed into place, so a half-finished update never becomes current.
 - Compressible files are stored only as `.br`; the plain copy is deleted. The server sends `.br` to clients that accept it and decompresses on the fly for the rest. There is no gzip.
@@ -36,7 +36,8 @@ Add a tool by adding an entry to `server/tools.json`; its release must publish a
 
 ## HTTP API
 
-- `GET /api/tools`: tool list.
+- `GET /api/tools`: tool list. `icon` is `/icons/<tool>.png` once the icon is stored, otherwise `null`.
+- `GET /icons/<tool>.png`: stored product icon.
 - `GET /api/launch/:tool`: SSE stream of `checking` / `updating` / `ready` / `failed`. `updating` includes `previousUrl` when an older version is installed. `ready` includes `url`.
 - `GET /api/install/:tool/:version`: same stream, for downloading one specific release without activating it.
 - `GET /api/versions[?remote=1]`: up to three previous versions per installed tool. `remote=1` fills from GitHub releases (cached 1 hour) and marks which are already installed.
@@ -46,9 +47,9 @@ Add a tool by adding an entry to `server/tools.json`; its release must publish a
 ## Caching rules
 
 - Files under `/apps/<tool>/<version>/` are `public, max-age=31536000, immutable`, except `index.html` and `manifest.txt`, which are `no-cache`.
-- Launcher files and the `/apps/<tool>/` redirect are `no-cache`; `/api/*` is `no-store`.
+- Launcher files, icons and the `/apps/<tool>/` redirect are `no-cache`; `/api/*` is `no-store`.
 - `.wasm` must be served as `application/wasm`. The tools need no COOP/COEP headers; do not add `X-Frame-Options` or a restrictive `frame-ancestors`.
-- `web/sw.js`: tool versions are cache-first (they are immutable). The start page, `/api/tools` and `/api/versions` are network-first with a 3 s timeout when a cached copy exists. `/api/launch` and `/api/install` are never cached.
+- `web/sw.js`: tool versions are cache-first (they are immutable). Icons are network-first, falling back to the cache offline. The start page, `/api/tools` and `/api/versions` are network-first with a 3 s timeout when a cached copy exists. `/api/launch` and `/api/install` are never cached.
 
 ## Conventions and pitfalls
 

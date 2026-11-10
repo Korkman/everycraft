@@ -7,7 +7,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 import { constants, createBrotliCompress } from 'node:zlib';
-import { appDir, listOldVersions, prune, readCurrent, versionDir, VERSION_RE, writeCurrent } from './store.js';
+import { appDir, iconPath, listOldVersions, prune, readCurrent, versionDir, VERSION_RE, writeCurrent } from './store.js';
 
 const run = promisify(execFile);
 
@@ -23,6 +23,7 @@ const REMOTE_TIMEOUT_MS = 5_000;
 const TAG_TIMEOUT_MS = 30_000;
 const COMPRESSIBLE = new Set(['.wasm', '.js', '.html', '.css', '.json', '.txt', '.svg']);
 const BROTLI_LEVEL = 9;
+const ICON_PX = 128;
 
 const jobs = new Map();
 const releaseCache = new Map();
@@ -62,7 +63,7 @@ async function installOld(id, tool, version, job) {
   }
   job.set('updating', { version });
   const rel = toRelease(tool, await ghJson(`/repos/${tool.repo}/releases/tags/${encodeURIComponent(version)}`, TAG_TIMEOUT_MS));
-  await install(id, rel, { activate: false });
+  await install(id, tool, rel, { activate: false });
   job.set('ready', { version });
 }
 
@@ -125,7 +126,7 @@ async function update(id, tool, job) {
 
   job.set('updating', { version: latest.version });
   try {
-    await install(id, latest);
+    await install(id, tool, latest);
     job.set('ready', { version: latest.version });
   } catch (err) {
     fallback(err);
@@ -159,7 +160,7 @@ function toRelease(tool, rel) {
   };
 }
 
-async function install(id, latest, { activate = true } = {}) {
+async function install(id, tool, latest, { activate = true } = {}) {
   const tmp = join(appDir(id), `.tmp-${randomBytes(4).toString('hex')}`);
   await mkdir(tmp, { recursive: true });
   try {
@@ -177,6 +178,7 @@ async function install(id, latest, { activate = true } = {}) {
     const dest = versionDir(id, latest.version);
     await rm(dest, { recursive: true, force: true });
     await rename(root, dest);
+    await storeIcon(id, tool, latest.version, tmp);
     if (activate) {
       const now = Date.now();
       await writeCurrent(id, { version: latest.version, installedAt: now, checkedAt: now });
@@ -184,6 +186,19 @@ async function install(id, latest, { activate = true } = {}) {
     }
   } finally {
     await rm(tmp, { recursive: true, force: true });
+  }
+}
+
+// Icons are not in the release zip, so take them from the tag's source tree. A failed fetch keeps the previous icon and never fails the install.
+async function storeIcon(id, tool, version, tmp) {
+  const url = `https://raw.githubusercontent.com/${tool.repo}/${encodeURIComponent(version)}`
+    + `/assets/app-icon/hicolor/${ICON_PX}x${ICON_PX}/apps/ai.storyteller.${id}.png`;
+  const file = join(tmp, 'icon.png');
+  try {
+    await download(url, file);
+    await rename(file, iconPath(id));
+  } catch (err) {
+    console.warn(`[${id}] icon download failed: ${err.message}`);
   }
 }
 

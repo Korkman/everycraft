@@ -8,6 +8,8 @@ export const VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 export const appDir = (tool) => join(DATA_DIR, 'apps', tool);
 export const versionDir = (tool, version) => join(appDir(tool), version);
+// Lives beside the version directories so pruning never removes it.
+export const iconPath = (tool) => join(appDir(tool), 'icon.png');
 
 export async function readCurrent(tool) {
   try {

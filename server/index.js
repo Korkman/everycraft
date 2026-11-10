@@ -6,7 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { createBrotliDecompress } from 'node:zlib';
 import { installVersion, launch, previousVersions } from './updater.js';
-import { readCurrent, versionDir, VERSION_RE } from './store.js';
+import { appDir, iconPath, readCurrent, versionDir, VERSION_RE } from './store.js';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const WEB_ROOT = fileURLToPath(new URL('../web', import.meta.url));
@@ -50,7 +50,14 @@ async function route(req, res) {
 
   if (path === '/healthz') return text(res, 200, 'ok');
   if (path === '/api/tools') {
-    const list = Object.entries(tools).map(([id, t]) => ({ id, name: t.name, description: t.description }));
+    const list = await Promise.all(
+      Object.entries(tools).map(async ([id, t]) => ({
+        id,
+        name: t.name,
+        description: t.description,
+        icon: (await statFile(iconPath(id))) ? `/icons/${id}.png` : null,
+      })),
+    );
     return json(res, list, 'no-store');
   }
   if (path === '/api/versions') {
@@ -75,6 +82,7 @@ async function route(req, res) {
     return stream(req, res, launch(id, tools[id]), id);
   }
   if (path.startsWith('/apps/')) return app(req, res, url);
+  if (path.startsWith('/icons/')) return icon(req, res, path);
   return serve(req, res, WEB_ROOT, path === '/' ? 'index.html' : path, () => NO_CACHE);
 }
 
@@ -118,6 +126,12 @@ async function app(req, res, url) {
   if (rel.startsWith('app/snippets/') && !(await statFile(join(dir, rel)))) rel = rel.slice('app/'.length);
   return serve(req, res, dir, rel, (file) =>
     REVALIDATE_NAMES.has(basename(file)) ? NO_CACHE : IMMUTABLE, true);
+}
+
+async function icon(req, res, path) {
+  const match = /^\/icons\/([^/]+)\.png$/.exec(path);
+  if (!match || !Object.hasOwn(tools, match[1])) return text(res, 404, 'Not found');
+  return serve(req, res, appDir(match[1]), 'icon.png', () => NO_CACHE);
 }
 
 async function serve(req, res, root, rel, cachePolicy, precompressed = false) {
