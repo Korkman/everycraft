@@ -76,5 +76,17 @@
     "description": "Interface design and prototyping",
     "repo": "storytold/figcraft",
     "asset": "^figcraft-web-.*\\.zip$"
+  },
+  "texturecraft": {
+    "name": "TextureCraft",
+    "description": "3D texture painting",
+    "repo": "storytold/texturecraft",
+    "asset": "^texturecraft-web-.*\\.zip$"
+  },
+  "materialcraft": {
+    "name": "MaterialCraft",
+    "description": "Node-based material design",
+    "repo": "storytold/materialcraft",
+    "asset": "^materialcraft-web-.*\\.zip$"
   }
 }
