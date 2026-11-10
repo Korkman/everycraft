@@ -37,7 +37,7 @@ Add a tool by adding an entry to `server/tools.json`; its release must publish a
 ## HTTP API
 
 - `GET /api/tools`: tool list. `icon` is `/icons/<tool>.png` once the icon is stored, otherwise `null`.
-- `GET /icons/<tool>.png`: stored product icon.
+`GET /icons/<tool>.png`: stored product icon. The start page shows `/placeholder.svg` (a generic glyph in `web/`) while a tool has no icon.
 - `GET /api/launch/:tool`: SSE stream of `checking` / `updating` / `ready` / `failed`. `updating` includes `previousUrl` when an older version is installed. `ready` includes `url`.
 - `GET /api/install/:tool/:version`: same stream, for downloading one specific release without activating it.
 - `GET /api/versions[?remote=1]`: up to three previous versions per installed tool. `remote=1` fills from GitHub releases (cached 1 hour) and marks which are already installed.

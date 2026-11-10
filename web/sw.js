@@ -1,6 +1,6 @@
 const SHELL = 'shell-v1';
 const APPS = 'apps-v1';
-const SHELL_FILES = ['/', '/launcher.js', '/style.css', '/manifest.webmanifest', '/icon.svg', '/api/tools'];
+const SHELL_FILES = ['/', '/launcher.js', '/style.css', '/manifest.webmanifest', '/icon.svg', '/placeholder.svg', '/api/tools'];
 const NETWORK_TIMEOUT_MS = 3000;
 
 self.addEventListener('install', (e) => {
