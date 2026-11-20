@@ -26,10 +26,12 @@ navigator.userAgentData?.getHighEntropyValues(['architecture'])
   })
   .catch(() => {});
 
-// OS matches rank first, then architecture within each OS; ties keep the server order.
+// Current-OS downloads come first, matching architecture ahead of the rest; other platforms follow alphabetically.
 function sortForPlatform(list) {
-  const rank = (p) => (p.os === platform.os ? 0 : 2) + (p.arch === platform.arch || p.arch === 'universal' ? 0 : 1);
-  return [...list].sort((a, b) => rank(a) - rank(b));
+  const archRank = (p) => (p.arch === platform.arch || p.arch === 'universal' ? 0 : 1);
+  const own = list.filter((p) => p.os === platform.os).sort((a, b) => archRank(a) - archRank(b));
+  const rest = list.filter((p) => p.os !== platform.os).sort((a, b) => a.label.localeCompare(b.label));
+  return [...own, ...rest];
 }
 
 function closeMenus() {
