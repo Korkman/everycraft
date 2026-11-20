@@ -27,6 +27,7 @@ const ICON_PX = 128;
 
 const jobs = new Map();
 const releaseCache = new Map();
+const downloadCache = new Map();
 
 // Joins the running job for a key or starts one; never rejects.
 function startJob(key, work) {
@@ -96,6 +97,36 @@ async function releaseTags(tool) {
     .map((r) => r.tag_name);
   releaseCache.set(tool.repo, { at: Date.now(), tags });
   return tags;
+}
+
+// Matched against the latest release's asset names, in menu order. `arch` is 'universal' for builds that run on either.
+const DOWNLOAD_TARGETS = [
+  { id: 'linux-aarch64-appimage', os: 'linux', arch: 'arm64', label: 'Linux aarch64 AppImage', pattern: /-linux-aarch64\.AppImage$/ },
+  { id: 'linux-x86_64-appimage', os: 'linux', arch: 'x64', label: 'Linux x86_64 AppImage', pattern: /-linux-x86_64\.AppImage$/ },
+  { id: 'macos-universal-dmg', os: 'macos', arch: 'universal', label: 'macOS universal (.dmg)', pattern: /-macos-universal\.dmg$/ },
+  { id: 'windows-x64-portable', os: 'windows', arch: 'x64', label: 'Windows x64 portable', pattern: /-windows-x64-portable\.zip$/ },
+  { id: 'windows-arm64-portable', os: 'windows', arch: 'arm64', label: 'Windows arm64 portable', pattern: /-windows-arm64-portable\.zip$/ },
+];
+
+// Per-platform links for the latest release, or for `version` when given.
+export async function downloads(tool, version) {
+  const key = `${tool.repo}@${version ?? 'latest'}`;
+  const hit = downloadCache.get(key);
+  if (hit && Date.now() - hit.at < RELEASES_TTL_MS) return hit.links;
+
+  const path = version ? `releases/tags/${encodeURIComponent(version)}` : 'releases/latest';
+  const rel = await ghJson(`/repos/${tool.repo}/${path}`, REMOTE_TIMEOUT_MS);
+  const assets = rel.assets ?? [];
+  const links = {
+    tag: rel.tag_name,
+    platforms: DOWNLOAD_TARGETS.flatMap(({ id, os, arch, label, pattern }) => {
+      const asset = assets.find((a) => pattern.test(a.name));
+      return asset ? [{ id, os, arch, label, url: asset.browser_download_url }] : [];
+    }),
+    other: rel.html_url,
+  };
+  downloadCache.set(key, { at: Date.now(), links });
+  return links;
 }
 
 async function update(id, tool, job) {

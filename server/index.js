@@ -5,7 +5,7 @@ import { basename, extname, join, normalize, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { createBrotliDecompress } from 'node:zlib';
-import { installVersion, launch, previousVersions } from './updater.js';
+import { downloads, installVersion, launch, previousVersions } from './updater.js';
 import { appDir, iconPath, readCurrent, versionDir, VERSION_RE } from './store.js';
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -55,6 +55,7 @@ async function route(req, res) {
         id,
         name: t.name,
         description: t.description,
+        repo: t.repo,
         icon: (await statFile(iconPath(id))) ? `/icons/${id}.png` : null,
       })),
     );
@@ -66,10 +67,23 @@ async function route(req, res) {
       Object.entries(tools).map(async ([id, t]) => ({
         id,
         name: t.name,
+        repo: t.repo,
         versions: (await previousVersions(id, t, remote)).map((v) => ({ ...v, url: `/apps/${id}/${v.version}/` })),
       })),
     );
     return json(res, rows.filter((r) => r.versions.length), 'no-store');
+  }
+  if (path.startsWith('/api/downloads/')) {
+    const id = decodeURIComponent(path.slice(15));
+    if (!Object.hasOwn(tools, id)) return text(res, 404, 'Unknown tool');
+    const version = url.searchParams.get('version') ?? undefined;
+    if (version !== undefined && !VERSION_RE.test(version)) return text(res, 404, 'Not found');
+    try {
+      return json(res, await downloads(tools[id], version), 'no-store');
+    } catch (err) {
+      console.warn(`[${id}] downloads failed: ${err.message}`);
+      return text(res, 502, 'Release lookup failed');
+    }
   }
   if (path.startsWith('/api/install/')) {
     const [id, version] = path.slice(13).split('/').map(decodeURIComponent);

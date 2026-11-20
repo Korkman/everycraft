@@ -7,6 +7,104 @@ const skip = document.getElementById('skip');
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 
+// Only orders the download menu, so a wrong guess just leaves the default order.
+function detectPlatform() {
+  const ua = navigator.userAgent;
+  const hint = navigator.userAgentData?.platform ?? '';
+  let os = null;
+  if (/windows/i.test(hint) || /Windows/.test(ua)) os = 'windows';
+  else if (/mac/i.test(hint) || /Macintosh/.test(ua)) os = 'macos';
+  else if ((/linux/i.test(hint) || /Linux/.test(ua)) && !/Android/.test(ua)) os = 'linux';
+  return { os, arch: /aarch64|arm64/i.test(ua) ? 'arm64' : 'x64' };
+}
+
+const platform = detectPlatform();
+// Windows user agents always say x64, so ask for the real architecture where supported.
+navigator.userAgentData?.getHighEntropyValues(['architecture'])
+  .then(({ architecture }) => {
+    if (architecture) platform.arch = architecture.startsWith('arm') ? 'arm64' : 'x64';
+  })
+  .catch(() => {});
+
+// OS matches rank first, then architecture within each OS; ties keep the server order.
+function sortForPlatform(list) {
+  const rank = (p) => (p.os === platform.os ? 0 : 2) + (p.arch === platform.arch || p.arch === 'universal' ? 0 : 1);
+  return [...list].sort((a, b) => rank(a) - rank(b));
+}
+
+function closeMenus() {
+  for (const menu of document.querySelectorAll('.tool-menu')) menu.hidden = true;
+  for (const toggle of document.querySelectorAll('[aria-expanded]')) toggle.setAttribute('aria-expanded', 'false');
+}
+
+function bindMenu(toggle, menu, onOpen) {
+  toggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const wasOpen = !menu.hidden;
+    closeMenus();
+    if (!wasOpen) {
+      menu.hidden = false;
+      toggle.setAttribute('aria-expanded', 'true');
+      onOpen?.();
+    }
+  });
+}
+
+function menuLink(href, text, { external = false } = {}) {
+  const a = document.createElement('a');
+  a.setAttribute('role', 'menuitem');
+  a.href = href;
+  a.textContent = text;
+  if (external) {
+    a.target = '_blank';
+    a.rel = 'noopener';
+  }
+  return a;
+}
+
+function menuNote(text) {
+  const p = document.createElement('p');
+  p.className = 'menu-note';
+  p.textContent = text;
+  return p;
+}
+
+// Lazily fetches per-platform links from `endpoint` on each load(); falls back to `fallbackUrl` on error.
+function downloadMenu(endpoint, fallbackUrl) {
+  const list = document.createElement('div');
+  list.className = 'menu-downloads';
+  let links = null;
+  let request = null;
+  const fetchLinks = () => {
+    request ??= fetch(endpoint)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((data) => (links = data))
+      .catch((err) => {
+        request = null;
+        throw err;
+      });
+    return request;
+  };
+  const load = async () => {
+    list.replaceChildren(menuNote('Loading downloads…'));
+    try {
+      const data = links ?? (await fetchLinks());
+      list.replaceChildren(
+        ...sortForPlatform(data.platforms).map((p) => menuLink(p.url, p.label, { external: true })),
+        menuLink(data.other, 'Other platforms', { external: true }),
+      );
+    } catch {
+      list.replaceChildren(menuLink(fallbackUrl, 'Download from GitHub', { external: true }));
+    }
+  };
+  return { list, load };
+}
+
+document.addEventListener('click', closeMenus);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeMenus();
+});
+
 function show(text) {
   overlay.hidden = false;
   spinner.hidden = false;
@@ -88,6 +186,9 @@ function follow(streamUrl, tool, { remember, verb }) {
 try {
   const tools = await (await fetch('/api/tools')).json();
   for (const tool of tools) {
+    const split = document.createElement('div');
+    split.className = 'tool-split';
+
     const link = document.createElement('a');
     link.className = 'tool';
     link.href = `/?launch=${encodeURIComponent(tool.id)}`;
@@ -99,13 +200,41 @@ try {
     link.prepend(img);
     link.querySelector('strong').textContent = tool.name;
     link.querySelector('span').textContent = tool.description;
+    split.append(link);
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'tool-more';
+    toggle.setAttribute('aria-label', `More options for ${tool.name}`);
+    toggle.setAttribute('aria-haspopup', 'menu');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.textContent = '\u25BE';
+
+    const menu = document.createElement('div');
+    menu.className = 'tool-menu';
+    menu.setAttribute('role', 'menu');
+    menu.hidden = true;
+    const run = menuLink(link.href, 'Run in browser');
+    const label = document.createElement('div');
+    label.className = 'menu-label';
+    label.textContent = 'Download';
+    const downloads = downloadMenu(`/api/downloads/${encodeURIComponent(tool.id)}`, `https://github.com/${tool.repo}`);
+    menu.append(run, label, downloads.list);
+
+    bindMenu(toggle, menu, downloads.load);
+    split.append(toggle, menu);
+
     // Modified and middle clicks are left to the browser, which opens the link in a new tab.
-    link.addEventListener('click', (e) => {
+    const launchOnClick = (a) => a.addEventListener('click', (e) => {
       if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
       e.preventDefault();
+      closeMenus();
       launch(tool);
     });
-    grid.append(link);
+    launchOnClick(link);
+    launchOnClick(run);
+
+    grid.append(split);
   }
 
   const requested = new URLSearchParams(location.search).get('launch');
@@ -134,21 +263,43 @@ function renderOld(tools) {
     name.textContent = tool.name;
     row.append(name);
     for (const v of tool.versions) {
-      const a = document.createElement('a');
-      a.href = v.url;
-      if (v.installed) {
-        a.textContent = v.version;
-      } else {
-        a.textContent = `\u2193 ${v.version}`;
-        a.title = 'Downloaded when opened';
-        a.addEventListener('click', (e) => {
+      const wrap = document.createElement('span');
+      wrap.className = 'version';
+
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'version-chip';
+      chip.setAttribute('aria-haspopup', 'menu');
+      chip.setAttribute('aria-expanded', 'false');
+      chip.textContent = v.installed ? v.version : `\u2193 ${v.version}`;
+      if (!v.installed) chip.title = 'Downloaded when opened';
+
+      const menu = document.createElement('div');
+      menu.className = 'tool-menu';
+      menu.setAttribute('role', 'menu');
+      menu.hidden = true;
+      const run = menuLink(v.url, 'Run in browser');
+      if (!v.installed) {
+        run.addEventListener('click', (e) => {
           e.preventDefault();
+          closeMenus();
           show(`Starting ${tool.name} ${v.version}…`);
           follow(`/api/install/${encodeURIComponent(tool.id)}/${encodeURIComponent(v.version)}`,
             { id: tool.id, name: `${tool.name} ${v.version}` }, { remember: false, verb: 'downloaded' });
         });
       }
-      row.append(a);
+      const label = document.createElement('div');
+      label.className = 'menu-label';
+      label.textContent = 'Download';
+      const downloads = downloadMenu(
+        `/api/downloads/${encodeURIComponent(tool.id)}?version=${encodeURIComponent(v.version)}`,
+        `https://github.com/${tool.repo}/releases/tag/${encodeURIComponent(v.version)}`,
+      );
+      menu.append(run, label, downloads.list);
+
+      bindMenu(chip, menu, downloads.load);
+      wrap.append(chip, menu);
+      row.append(wrap);
     }
     oldList.append(row);
   }

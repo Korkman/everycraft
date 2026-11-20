@@ -39,7 +39,7 @@ self.addEventListener('fetch', (e) => {
   if (parts[1] === 'apps' && parts[3]) return e.respondWith(cacheFirst(request));
   // Icons are refreshed on each download, so they are network-first and only fall back to the cache offline.
   if (parts[1] === 'icons') return e.respondWith(networkFirst(request));
-  if (url.pathname === '/api/versions' || SHELL_FILES.includes(url.pathname)) {
+  if (url.pathname === '/api/versions' || url.pathname.startsWith('/api/downloads/') || SHELL_FILES.includes(url.pathname)) {
     return e.respondWith(networkFirst(request));
   }
 });
