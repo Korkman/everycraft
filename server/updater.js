@@ -53,6 +53,19 @@ function startJob(key, work) {
 
 export const launch = (id, tool) => startJob(id, (job) => update(id, tool, job));
 
+// Same update flow as launch, resolved once the job settles. Respects the same caches.
+export const preload = (id, tool) =>
+  new Promise((resolve) => {
+    const job = launch(id, tool);
+    const settle = (j) => {
+      if (j.state !== 'ready' && j.state !== 'failed') return;
+      job.listeners.delete(settle);
+      resolve({ state: j.state, version: j.version, error: j.error });
+    };
+    job.listeners.add(settle);
+    settle(job);
+  });
+
 // Downloads one specific release without making it the current version.
 export const installVersion = (id, tool, version) =>
   startJob(`${id}@${version}`, (job) => installOld(id, tool, version, job));

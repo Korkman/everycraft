@@ -44,6 +44,7 @@ Add a tool by adding an entry to `server/tools.json`; its release must publish a
 - `GET /api/downloads/:tool[?version=vX.Y.Z]`: download links from the latest GitHub release, or from the given release tag (`platforms` matched by asset name in `DOWNLOAD_TARGETS`, plus `other` = the release page). The latest release shares one API call and a 1-hour cache with the update check (`latestRelease`); a given tag is cached 1 hour. The start page fetches it when a tool's or a previous version's menu opens.
 - `GET /apps/:tool/` redirects to the current version. `GET /apps/:tool/:version/*` serves files; a version that is not on disk redirects to the same path under the current version.
 - `GET /healthz`.
+- `GET /?preload=all|<tool>`: non-interactive install or update for one tool or all of them, for setup scripts and cron. Returns JSON per tool (`state`, `version`, `error`); 502 if any failed, 404 for an unknown tool. It uses the same update flow and caches as launch, so repeated calls within the cache windows make no GitHub requests.
 
 ## Caching rules
 

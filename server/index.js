@@ -5,7 +5,7 @@ import { basename, extname, join, normalize, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { createBrotliDecompress } from 'node:zlib';
-import { downloads, installVersion, launch, previousVersions } from './updater.js';
+import { downloads, installVersion, launch, preload, previousVersions } from './updater.js';
 import { appDir, iconPath, readCurrent, versionDir, VERSION_RE } from './store.js';
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -49,6 +49,7 @@ async function route(req, res) {
   const path = url.pathname;
 
   if (path === '/healthz') return text(res, 200, 'ok');
+  if (path === '/' && url.searchParams.has('preload')) return preloadRoute(res, url.searchParams.get('preload'));
   if (path === '/api/tools') {
     const list = await Promise.all(
       Object.entries(tools).map(async ([id, t]) => ({
@@ -98,6 +99,16 @@ async function route(req, res) {
   if (path.startsWith('/apps/')) return app(req, res, url);
   if (path.startsWith('/icons/')) return icon(req, res, path);
   return serve(req, res, WEB_ROOT, path === '/' ? 'index.html' : path, () => NO_CACHE);
+}
+
+// Non-interactive: installs or updates one tool, or all of them, and reports each result. 502 if any failed.
+async function preloadRoute(res, target) {
+  const ids = target === 'all' ? Object.keys(tools) : Object.hasOwn(tools, target) ? [target] : null;
+  if (!ids) return text(res, 404, 'Unknown tool');
+  const results = await Promise.all(ids.map(async (id) => ({ id, ...(await preload(id, tools[id])) })));
+  const failed = results.some((r) => r.state === 'failed');
+  res.writeHead(failed ? 502 : 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify(results));
 }
 
 function stream(req, res, job, id) {
